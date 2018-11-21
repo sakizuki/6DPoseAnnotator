@@ -77,6 +77,9 @@ class Mapping():
                img[int(pix[1]),int(pix[0])] = int(255.0*(cloud_np[i,2]/cloud_min[2]))
         
         return img
+    
+    def Pix2Pnt( pix, val ):
+        pnt = np.array([0.0,0.0,0.0], dtype=np.float)
 
 def mouse_event(event, x, y, flags, param):
     w_name, img = param
@@ -138,18 +141,14 @@ if __name__ == "__main__":
     cloud_m_c = Centering(cloud_m_ds)
     cloud_m_c = Scaling(cloud_m_c, 0.001)
 
-    print('Down sampling')
-    voxel_size = 0.002
-    print(np.asarray(cloud_m_c.points))
-
     offset = np.array([0.03,0.13,0.88])
-
     np_tmp = np.asarray(cloud_m_c.points) 
     np_tmp += offset
     cloud_m_c.points = o3.Vector3dVector(np_tmp)
-    print(cloud_m_c)
-    print(np.asarray(cloud_m_c.points))
-    o3.write_point_cloud( "cloud_m.pcd", pcd )
+
+    #print(cloud_m_c)
+    #print(np.asarray(cloud_m_c.points))
+    o3.write_point_cloud( "cloud_m.pcd", cloud_m_c )
 
     mapping = Mapping('./data/realsense_intrinsic.json')
     img_mapped = mapping.Cloud2Image( cloud_m_c )
@@ -176,8 +175,12 @@ if __name__ == "__main__":
     trans = np.identity(4)
 
     #ICPによる微修正
+    voxel_size = 0.02
     result_icp = refine_registration(source, target, trans, 10*voxel_size)
     print(result_icp)
     print('Result transformation is:')
     print(result_icp.transformation)
     draw_registration_result(source, target, result_icp.transformation)
+    cloud_result = copy.deepcopy( source )
+    cloud_result.transform( result_icp.transformation )
+    o3.write_point_cloud( "cloud_result.pcd", cloud_result)
