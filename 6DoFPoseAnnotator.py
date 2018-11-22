@@ -7,6 +7,7 @@ import numpy as np
 import cv2
 import copy
 
+cloud_rot = o3.PointCloud()
 
 def Centering( cloud_in ):
     """
@@ -43,7 +44,7 @@ def Scaling( cloud_in, scale ):
     return cloud_out
 
 class Mapping():
-    def __init__(self, camera_intrinsic_name, _w=640, _h=480, _d=400.0 ):
+    def __init__(self, camera_intrinsic_name, _w=640, _h=480, _d=1000.0 ):
         self.camera_intrinsic = o3.read_pinhole_camera_intrinsic(camera_intrinsic_name)
         self.width = _w
         self.height = _h
@@ -70,7 +71,7 @@ class Mapping():
         cloud_mapped = o3.PointCloud()
         cloud_mapped.points = o3.Vector3dVector(cloud_np)
         cloud_mapped.transform(self.camera_intrinsic4x4)
-        print(np.asarray(cloud_mapped.points))
+        #print(np.asarray(cloud_mapped.points))
         
         for i, pix in enumerate(cloud_mapped.points):
             if pix[0]<self.width and 0<pix[0] and pix[1]<self.height and 0<pix[1]:
@@ -78,17 +79,44 @@ class Mapping():
         
         return img
     
-    def Pix2Pnt( pix, val ):
+    def Pix2Pnt( self, pix, val ):
         pnt = np.array([0.0,0.0,0.0], dtype=np.float)
+        depth = val / self.d
+        #print('[0,2]: {}'.format(self.camera_intrinsic.intrinsic_matrix[0,2]))
+        #print('[1,2]: {}'.format(self.camera_intrinsic.intrinsic_matrix[1,2]))
+        #print(self.camera_intrinsic.intrinsic_matrix)
+        pnt[0] = (float(pix[0]) - self.camera_intrinsic.intrinsic_matrix[0,2]) * depth / self.camera_intrinsic.intrinsic_matrix[0,0]
+        pnt[1] = (float(pix[1]) - self.camera_intrinsic.intrinsic_matrix[1,2]) * depth / self.camera_intrinsic.intrinsic_matrix[1,1]
+        pnt[2] = depth
+
+        return pnt
+
 
 def mouse_event(event, x, y, flags, param):
-    w_name, img = param
+    w_name, img_c, img_d, mapping, cloud = param
 
     # 左クリックで赤い円形を生成
     if event == cv2.EVENT_LBUTTONUP:
         #cv2.circle(img, (x, y), 50, (0, 0, 255), -1)
-        print('Clicked({},{})'.format(x, y))
-    
+        print('Clicked({},{}): depth:{}'.format(x, y, img_d[y,x]))
+        print(img_d[y,x])
+        pnt = mapping.Pix2Pnt( [x,y], img_d[y,x] )
+        print('3D position is', pnt)
+
+        #compute current center of the cloud
+        cloud_c = Centering(cloud)
+        np_cloud = np.asarray(cloud_c.points) 
+
+        np_cloud += pnt
+        print('Offset:', pnt )
+
+        cloud_off = o3.PointCloud()
+        cloud_off.points = o3.Vector3dVector(np_cloud)
+        img_m = mapping.Cloud2Image( cloud_off )
+        img_m2 = cv2.merge((img_m,img_m,img_m,))
+        img_imposed = cv2.addWeighted(img_m2, 0.5,img_c, 0.5, 0 )
+
+        cv2.imshow( w_name, img_imposed )
     # 右クリック + Shiftキーで緑色のテキストを生成
     #elif event == cv2.EVENT_RBUTTONUP and flags & cv2.EVENT_FLAG_SHIFTKEY:
     #    cv2.putText(img, "CLICK!!", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 5, (0, 255, 0), 3, cv2.CV_AA)
@@ -132,6 +160,10 @@ if __name__ == "__main__":
     pcd = o3.create_point_cloud_from_rgbd_image(rgbd_image, camera_intrinsic)
     o3.write_point_cloud( "cloud_in.pcd", pcd )
 
+    np_pcd = np.asarray(pcd.points)
+    print('min-max of input point cloud')
+    print(np.min(np_pcd, axis=0))
+    print(np.max(np_pcd, axis=0))
 
     # 物体モデルの読み込みと大きさ修正
     model_name = "./data/hammer_1.pcd"
@@ -141,10 +173,10 @@ if __name__ == "__main__":
     cloud_m_c = Centering(cloud_m_ds)
     cloud_m_c = Scaling(cloud_m_c, 0.001)
 
-    offset = np.array([0.03,0.13,0.88])
-    np_tmp = np.asarray(cloud_m_c.points) 
-    np_tmp += offset
-    cloud_m_c.points = o3.Vector3dVector(np_tmp)
+    #offset = np.array([0.03,0.13,0.88])
+    #np_tmp = np.asarray(cloud_m_c.points) 
+    #np_tmp += offset
+    #cloud_m_c.points = o3.Vector3dVector(np_tmp)
 
     #print(cloud_m_c)
     #print(np.asarray(cloud_m_c.points))
@@ -156,21 +188,31 @@ if __name__ == "__main__":
     """Mouse event"""
     window_name = '6DoF Pose Annotator'
     cv2.namedWindow( window_name, cv2.WINDOW_NORMAL)
-    cv2.setMouseCallback( window_name, mouse_event, [window_name, img_mapped])
+    cv2.setMouseCallback( window_name, mouse_event, 
+                        [window_name, np.asarray(color_raw), np.asarray(depth_raw), mapping, cloud_m_c])
 
+
+    cv2.imshow( window_name, img_mapped )
     while (True):
-        cv2.imshow( window_name, img_mapped)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
             break
+        if key == ord("i"):
+            print('ICP start')
 
     cv2.destroyAllWindows()
 
 
+    np_depth = np.asarray(depth_raw)
+    print('max_depth:', np.max(np_depth))
+    print('min_depth:', np.min(np_depth))
 
+    """
+    
     source = cloud_m_c
     target = pcd
 
-
+    
 
     trans = np.identity(4)
 
@@ -184,3 +226,4 @@ if __name__ == "__main__":
     cloud_result = copy.deepcopy( source )
     cloud_result.transform( result_icp.transformation )
     o3.write_point_cloud( "cloud_result.pcd", cloud_result)
+    """
