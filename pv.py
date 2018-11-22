@@ -20,7 +20,7 @@ if __name__ == "__main__":
         tmp = read_point_cloud( name ) 
         pcd.append(tmp)
         print(np.asarray(tmp.points))
-        draw_geometries([tmp])
+        #draw_geometries([tmp])
 
     if len(args.input) == 1:
         draw_geometries([pcd[0]])

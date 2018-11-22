@@ -93,9 +93,9 @@ class Mapping():
 
 
 def mouse_event(event, x, y, flags, param):
-    w_name, img_c, img_d, mapping, cloud = param
+    w_name, img_c, img_d, mapping = param
 
-    # 左クリックで赤い円形を生成
+    """Direct move. Object model will be moved to clicked position."""
     if event == cv2.EVENT_LBUTTONUP:
         #cv2.circle(img, (x, y), 50, (0, 0, 255), -1)
         print('Clicked({},{}): depth:{}'.format(x, y, img_d[y,x]))
@@ -104,19 +104,20 @@ def mouse_event(event, x, y, flags, param):
         print('3D position is', pnt)
 
         #compute current center of the cloud
-        cloud_c = Centering(cloud)
+        cloud_c = copy.deepcopy(cloud_rot)
+        cloud_c = Centering(cloud_c)
         np_cloud = np.asarray(cloud_c.points) 
 
         np_cloud += pnt
         print('Offset:', pnt )
 
-        cloud_off = o3.PointCloud()
-        cloud_off.points = o3.Vector3dVector(np_cloud)
-        img_m = mapping.Cloud2Image( cloud_off )
+        cloud_rot.points = o3.Vector3dVector(np_cloud)
+        img_m = mapping.Cloud2Image( cloud_rot )
         img_m2 = cv2.merge((img_m,img_m,img_m,))
         img_imposed = cv2.addWeighted(img_m2, 0.5,img_c, 0.5, 0 )
 
         cv2.imshow( w_name, img_imposed )
+        o3.write_point_cloud( "cloud_move.pcd", cloud_rot )
     # 右クリック + Shiftキーで緑色のテキストを生成
     #elif event == cv2.EVENT_RBUTTONUP and flags & cv2.EVENT_FLAG_SHIFTKEY:
     #    cv2.putText(img, "CLICK!!", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 5, (0, 255, 0), 3, cv2.CV_AA)
@@ -154,11 +155,16 @@ if __name__ == "__main__":
     color_raw = o3.read_image("./data/rgb.png")
     depth_raw = o3.read_image("./data/depth.png")
     camera_intrinsic = o3.read_pinhole_camera_intrinsic("./data/realsense_intrinsic.json")
+    #color_raw = o3.read_image("./data2/rgb.png")
+    #depth_raw = o3.read_image("./data2/depth.png")
+    #camera_intrinsic = o3.read_pinhole_camera_intrinsic("./data2/realsense_intrinsic.json")
 
+    im_color = np.asarray(color_raw)
+    im_depth = np.asarray(depth_raw)
 
-    rgbd_image = o3.create_rgbd_image_from_color_and_depth( color_raw, depth_raw )
-    pcd = o3.create_point_cloud_from_rgbd_image(rgbd_image, camera_intrinsic)
-    o3.write_point_cloud( "cloud_in.pcd", pcd )
+    rgbd_image = o3.create_rgbd_image_from_color_and_depth( color_raw, depth_raw, 1000.0, 2.0 )
+    pcd = o3.create_point_cloud_from_rgbd_image(rgbd_image, camera_intrinsic )
+    o3.write_point_cloud( "cloud_in.ply", pcd )
 
     np_pcd = np.asarray(pcd.points)
     print('min-max of input point cloud')
@@ -173,6 +179,8 @@ if __name__ == "__main__":
     cloud_m_c = Centering(cloud_m_ds)
     cloud_m_c = Scaling(cloud_m_c, 0.001)
 
+    cloud_rot = copy.deepcopy(cloud_m_c)
+
     #offset = np.array([0.03,0.13,0.88])
     #np_tmp = np.asarray(cloud_m_c.points) 
     #np_tmp += offset
@@ -180,28 +188,42 @@ if __name__ == "__main__":
 
     #print(cloud_m_c)
     #print(np.asarray(cloud_m_c.points))
-    o3.write_point_cloud( "cloud_m.pcd", cloud_m_c )
+    o3.write_point_cloud( "cloud_m.pcd", cloud_rot )
 
     mapping = Mapping('./data/realsense_intrinsic.json')
-    img_mapped = mapping.Cloud2Image( cloud_m_c )
+    img_mapped = mapping.Cloud2Image( cloud_rot )
 
     """Mouse event"""
     window_name = '6DoF Pose Annotator'
     cv2.namedWindow( window_name, cv2.WINDOW_NORMAL)
     cv2.setMouseCallback( window_name, mouse_event, 
-                        [window_name, np.asarray(color_raw), np.asarray(depth_raw), mapping, cloud_m_c])
+                        [window_name, im_color, im_depth, mapping])
 
 
     cv2.imshow( window_name, img_mapped )
     while (True):
         key = cv2.waitKey(1) & 0xFF
+        """Quit"""
         if key == ord("q"):
             break
+        """ICP registration"""
         if key == ord("i"):
             print('ICP start')
+            voxel_size = 0.02
+            result_icp = refine_registration( cloud_rot, pcd, np.identity(4), 10*voxel_size)
+            print(result_icp)
+            cloud_rot.transform( result_icp.transformation )
+
+            img_m = mapping.Cloud2Image( cloud_rot )
+            img_m2 = cv2.merge((img_m,img_m,img_m,))
+            img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
+
+            cv2.imshow( window_name, img_mapped )
+            
 
     cv2.destroyAllWindows()
 
+    o3.write_point_cloud( "cloud_m.pcd", cloud_rot )
 
     np_depth = np.asarray(depth_raw)
     print('max_depth:', np.max(np_depth))
