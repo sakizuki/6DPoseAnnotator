@@ -2,6 +2,8 @@
 
 An interactive 6 degree-of-freedom pose annotation tool using point cloud processings.
 
+<img src="./data/6DoFAnnotation.gif" width="320px">
+
 ## Requirements
 - Open3d
 - Numpy
