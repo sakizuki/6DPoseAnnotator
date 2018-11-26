@@ -1,6 +1,6 @@
 # 6DPoseAnnotator
 
-An interactive 6 degreee-of-freedom pose annotation tool using point cloud processings.
+An interactive 6 degree-of-freedom pose annotation tool using point cloud processings.
 
 ## Requirements
 - Open3d
