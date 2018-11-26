@@ -9,7 +9,11 @@ import copy
 import common3Dfunc as c3D
 from math import *
 
-cloud_rot = o3.PointCloud()
+CLOUD_ROT = o3.PointCloud()
+""" Total transformation"""
+all_transformation = np.identity(4)
+""" Step size for rotation """
+step = 0.1*pi
 
 class Mapping():
     def __init__(self, camera_intrinsic_name, _w=640, _h=480, _d=1000.0 ):
@@ -65,6 +69,7 @@ def mouse_event(event, x, y, flags, param):
 
     """Direct move. Object model will be moved to clicked position."""
     if event == cv2.EVENT_LBUTTONUP:
+        global all_transformation
         #cv2.circle(img, (x, y), 50, (0, 0, 255), -1)
         print('Clicked({},{}): depth:{}'.format(x, y, img_d[y,x]))
         print(img_d[y,x])
@@ -72,42 +77,29 @@ def mouse_event(event, x, y, flags, param):
         print('3D position is', pnt)
 
         #compute current center of the cloud
-        cloud_c = copy.deepcopy(cloud_rot)
-        cloud_c, _ = c3D.Centering(cloud_c)
+        cloud_c = copy.deepcopy(CLOUD_ROT)
+        cloud_c, center = c3D.Centering(cloud_c)
         np_cloud = np.asarray(cloud_c.points) 
 
         np_cloud += pnt
         print('Offset:', pnt )
+        offset = np.identity(4)
+        offset[0:3,3] -= center
+        offset[0:3,3] += pnt
+        all_transformation = np.dot( all_transformation, offset )
 
-        cloud_rot.points = o3.Vector3dVector(np_cloud)
-        img_m = mapping.Cloud2Image( cloud_rot )
+        CLOUD_ROT.points = o3.Vector3dVector(np_cloud)
+        img_m = mapping.Cloud2Image( CLOUD_ROT )
         img_m2 = cv2.merge((img_m,img_m,img_m,))
         img_imposed = cv2.addWeighted(img_m2, 0.5,img_c, 0.5, 0 )
 
+        print("Total transformation is\n", all_transformation )
         cv2.imshow( w_name, img_imposed )
-        o3.write_point_cloud( "cloud_move.pcd", cloud_rot )
-    # 右クリック + Shiftキーで緑色のテキストを生成
-    #elif event == cv2.EVENT_RBUTTONUP and flags & cv2.EVENT_FLAG_SHIFTKEY:
-    #    cv2.putText(img, "CLICK!!", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 5, (0, 255, 0), 3, cv2.CV_AA)
-    
-    # 右クリックのみで青い四角形を生成
-    #elif event == cv2.EVENT_RBUTTONUP:
-    #    cv2.rectangle(img, (x-100, y-100), (x+100, y+100), (255, 0, 0), -1)
-
-
-
-#sourceをtransformationによって剛体変換してtargetと一緒に表示
-def draw_registration_result(source, target, transformation):
-    source_temp = copy.deepcopy(source)
-    target_temp = copy.deepcopy(target)
-    source_temp.paint_uniform_color([1, 0.706, 0])
-    target_temp.paint_uniform_color([0, 0.651, 0.929])
-    source_temp.transform(transformation)
-    o3.draw_geometries([source_temp, target_temp])
 
 
 #ICPによるリファイン
 def refine_registration(source, target, trans, voxel_size):
+    global all_transformation
     distance_threshold = voxel_size * 0.4
     print(":: Point-to-point ICP registration is applied on original point")
     print("   clouds to refine the alignment. This time we use a strict")
@@ -115,37 +107,62 @@ def refine_registration(source, target, trans, voxel_size):
     result = o3.registration_icp(source, target, 
             distance_threshold, trans,
             o3.TransformationEstimationPointToPoint())
-    return result
+    
+    """ update all transformation""" 
+    all_transformation = np.dot( all_transformation, result.transformation )
+
+    return result.transformation
 
 
 def icp_registration(source, target, voxel_size):
-    distance_threshold = voxel_size * 0.4
+    distance_threshold = voxel_size
     print(":: Point-to-point ICP registration is applied on original point")
     print("   clouds to refine the alignment. This time we use a strict")
     print("   distance threshold %.3f." % distance_threshold)
     trans = []
-    trans.append( c3D.RPY2Matrix4x4( 0, 0, 0 ) )
-    trans.append( c3D.RPY2Matrix4x4( pi, 0, 0 ) )
-    trans.append( c3D.RPY2Matrix4x4( 0, pi, 0 ) )
-    trans.append( c3D.RPY2Matrix4x4( 0, 0, pi ) )
+    scale = pi/3.0
+    for r in range(3):
+        roll = scale*r
+        for p in range(3):
+            pitch = scale*p
+            for y in range(3):
+                yaw = scale*y
+                trans_tmp = c3D.ComputeTransformationMatrixAroundCentroid( source, roll, pitch, yaw )
+                trans.append( trans_tmp )
 
-    result_score = 999.9
+    result_fitness = 999.0
     result = np.identity(4)
-    for t in trans:
+    trans_id = 0
+
+    for i, t in enumerate(trans):
     
-        cloud_rot, offset  = c3D.Centering( source )
-        cloud_rot.transform( t )
-        cloud_rot = c3D.Offset( cloud_rot, offset )
+        cloud_rot = copy.deepcopy(source)
+
+        #cloud_tmp = copy.deepcopy(cloud_rot)
+        #o3.write_point_cloud("rot"+str(i)+".ply", cloud_tmp )
+        #cloud_tmp.transform(t)
+        #o3.write_point_cloud("rot"+str(i)+"_.ply", cloud_tmp )
 
         result_tmp = o3.registration_icp(cloud_rot, target, 
                 distance_threshold, t,
                 o3.TransformationEstimationPointToPoint())
-        if result_tmp.inlier_rmse < result_score:
-            result_score = result_tmp.inlier_rmse
+        #print('Score: ',result_tmp.inlier_rmse)
+        #print('Fitness : ',result_tmp.fitness)
+        #if result_fitness < result_tmp.fitness:
+        if result_tmp.inlier_rmse < result_fitness and 0.1 < result_tmp.fitness:
+            result_fitness = result_tmp.inlier_rmse
             result = result_tmp.transformation
-            print(result_score)
+            trans_id = i
+            cloud_rot.transform( result_tmp.transformation )
+            o3.write_point_cloud("icp_result.ply", cloud_rot)
+            print(" Update: ", result_fitness)
+            print(' Fitness : ',result_tmp.fitness)
+            print(result)
+            print(trans[trans_id])
 
-    return result
+    print("trans id: ", trans_id)
+
+    return result, result_fitness
 
 if __name__ == "__main__":
     """Data loading"""
@@ -159,7 +176,8 @@ if __name__ == "__main__":
 
     rgbd_image = o3.create_rgbd_image_from_color_and_depth( color_raw, depth_raw, 1000.0, 2.0 )
     pcd = o3.create_point_cloud_from_rgbd_image(rgbd_image, camera_intrinsic )
-    o3.write_point_cloud( "cloud_in.ply", pcd )
+    cloud_in_ds = o3.voxel_down_sample(pcd, 0.005)
+    o3.write_point_cloud( "cloud_in_ds.ply", cloud_in_ds )
 
     np_pcd = np.asarray(pcd.points)
 
@@ -171,18 +189,10 @@ if __name__ == "__main__":
     cloud_m_c, _ = c3D.Centering(cloud_m_ds)
     cloud_m_c = c3D.Scaling(cloud_m_c, 0.001)
 
-    cloud_rot = copy.deepcopy(cloud_m_c)
-
-    #offset = np.array([0.03,0.13,0.88])
-    #np_tmp = np.asarray(cloud_m_c.points) 
-    #np_tmp += offset
-    #cloud_m_c.points = o3.Vector3dVector(np_tmp)
-
-    #print(cloud_m_c)
-    #print(np.asarray(cloud_m_c.points))
+    CLOUD_ROT = copy.deepcopy(cloud_m_c)
 
     mapping = Mapping('./data/realsense_intrinsic.json')
-    img_mapped = mapping.Cloud2Image( cloud_rot )
+    img_mapped = mapping.Cloud2Image( CLOUD_ROT )
 
     """Mouse event"""
     window_name = '6DoF Pose Annotator'
@@ -190,7 +200,7 @@ if __name__ == "__main__":
     cv2.setMouseCallback( window_name, mouse_event, 
                         [window_name, im_color, im_depth, mapping])
 
-
+    score = 999.9
     cv2.imshow( window_name, img_mapped )
     while (True):
         key = cv2.waitKey(1) & 0xFF
@@ -200,22 +210,56 @@ if __name__ == "__main__":
         """ICP registration"""
         if key == ord("i"):
             print('ICP start')
-            voxel_size = 0.02
-            #result_icp = refine_registration( cloud_rot, pcd, np.identity(4), 10*voxel_size)
-            result_icp = icp_registration( cloud_rot, pcd, 10*voxel_size)
-            print(result_icp)
-            cloud_rot.transform( result_icp )
+            voxel_size = 0.005
+            result_icp = refine_registration( CLOUD_ROT, pcd, np.identity(4), 10*voxel_size)
+            #result_icp, score_tmp = icp_registration( CLOUD_ROT, cloud_in_ds, voxel_size)
+            #print(result_icp)
+            #print("score:{}, current score:{}".format(score, score_tmp))
+            #if score_tmp < score:
+            CLOUD_ROT.transform( result_icp )
 
-            img_m = mapping.Cloud2Image( cloud_rot )
+            img_m = mapping.Cloud2Image( CLOUD_ROT )
             img_m2 = cv2.merge((img_m,img_m,img_m,))
             img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
+            cv2.imshow( window_name, img_mapped )
+        """Step rotation"""
+        if key == ord("1"):
+            print('Rotation around roll axis')
+            rotation = c3D.ComputeTransformationMatrixAroundCentroid( CLOUD_ROT, step, 0, 0 )
+            CLOUD_ROT.transform( rotation )
+            all_transformation = np.dot( all_transformation, rotation )
 
+            img_m = mapping.Cloud2Image( CLOUD_ROT )
+            img_m2 = cv2.merge((img_m,img_m,img_m,))
+            img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
+            cv2.imshow( window_name, img_mapped )
+            
+        if key == ord("2"):
+            print('Rotation around pitch axis')
+            rotation = c3D.ComputeTransformationMatrixAroundCentroid( CLOUD_ROT, 0, step, 0 )
+            CLOUD_ROT.transform( rotation )
+            all_transformation = np.dot( all_transformation, rotation )
+
+            img_m = mapping.Cloud2Image( CLOUD_ROT )
+            img_m2 = cv2.merge((img_m,img_m,img_m,))
+            img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
+            cv2.imshow( window_name, img_mapped )
+            
+        if key == ord("3"):
+            print('Rotation around yaw axis')
+            rotation = c3D.ComputeTransformationMatrixAroundCentroid( CLOUD_ROT, 0, 0, step )
+            CLOUD_ROT.transform( rotation )
+            all_transformation = np.dot( all_transformation, rotation )
+
+            img_m = mapping.Cloud2Image( CLOUD_ROT )
+            img_m2 = cv2.merge((img_m,img_m,img_m,))
+            img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
             cv2.imshow( window_name, img_mapped )
             
 
     cv2.destroyAllWindows()
 
-    o3.write_point_cloud( "cloud_m.ply", cloud_rot )
+    o3.write_point_cloud( "cloud_m.ply", CLOUD_ROT )
 
     np_depth = np.asarray(depth_raw)
     print('max_depth:', np.max(np_depth))

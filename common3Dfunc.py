@@ -7,16 +7,17 @@ import numpy as np
 import copy
 from math import *
 
-def Centering( cloud_in ):
+def Centering( _cloud_in ):
     """
     Centering()
     offset an input cloud to its centroid.
     
     input(s):
-        cloud_in: point cloud to be centered
+        _cloud_in: point cloud to be centered
     output(s):
         cloud_off: 
     """
+    cloud_in = copy.deepcopy(_cloud_in)
     np_m = np.asarray(cloud_in.points) 
     center = np.mean(np_m, axis=0)
     np_m[:] -= center
@@ -25,6 +26,35 @@ def Centering( cloud_in ):
     cloud_off.points = o3.Vector3dVector(np_m)
     
     return cloud_off, center
+
+def ComputeTransformationMatrixAroundCentroid( _cloud_in, _roll, _pitch, _yaw ):
+    """
+    Centering()
+    offset an input cloud to its centroid.
+    
+    input(s):
+        _cloud_in: point cloud to be centered
+    output(s):
+        cloud_off: 
+    """
+
+    """ offset center """
+    np_in = np.asarray(_cloud_in.points) 
+    center = np.mean(np_in, axis=0)
+    offset = np.identity(4)
+    offset[0:3,3] -= center
+
+    """ rotation """
+    rot = RPY2Matrix4x4( _roll, _pitch, _yaw )
+    
+    """ reverse offset """
+    reverse = np.identity(4)
+    reverse[0:3,3] = center
+
+    final = np.dot( reverse, np.dot( rot, offset ) )
+
+    return final 
+
 
 def Scaling( cloud_in, scale ):
     """
@@ -79,3 +109,9 @@ def RPY2Matrix4x4( roll, pitch, yaw ):
 
     return rot
 
+def Mat2RPY( rot ):
+    roll = atan2( rot[2, 1], rot[2, 2] )
+    pitch = atan2(-rot[2, 0], sqrt( rot[2, 1]*rot[2, 1]+rot[2, 2]*rot[2, 2] ) )
+    yaw = atan2( rot[1, 0], rot[0, 0] )
+    
+    return roll, pitch, yaw
