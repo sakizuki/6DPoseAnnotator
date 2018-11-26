@@ -6,42 +6,10 @@ import open3d as o3
 import numpy as np
 import cv2
 import copy
+import common3Dfunc as c3D
+from math import *
 
 cloud_rot = o3.PointCloud()
-
-def Centering( cloud_in ):
-    """
-    offset an input cloud to its centroid.
-    
-    input(s):
-        cloud_in: point cloud to be centered
-    output(s):
-        cloud_off: 
-    """
-    np_m = np.asarray(cloud_in.points) 
-    center = np.mean(np_m, axis=0)
-    np_m[:] -= center
-    
-    cloud_off = o3.PointCloud()
-    cloud_off.points = o3.Vector3dVector(np_m)
-    
-    return cloud_off
-
-def Scaling( cloud_in, scale ):
-    """
-    multiply scaling factor to the input point cloud.
-    input(s):
-        cloud_in: point cloud to be scaled.
-        scale: scaling factor
-    output(s):
-        cloud_out: 
-    """   
-    cloud_np = np.asarray(cloud_in.points) 
-    cloud_np *= scale
-    cloud_out = o3.PointCloud()
-    cloud_out.points = o3.Vector3dVector(cloud_np)
-    
-    return cloud_out
 
 class Mapping():
     def __init__(self, camera_intrinsic_name, _w=640, _h=480, _d=1000.0 ):
@@ -105,7 +73,7 @@ def mouse_event(event, x, y, flags, param):
 
         #compute current center of the cloud
         cloud_c = copy.deepcopy(cloud_rot)
-        cloud_c = Centering(cloud_c)
+        cloud_c, _ = c3D.Centering(cloud_c)
         np_cloud = np.asarray(cloud_c.points) 
 
         np_cloud += pnt
@@ -141,7 +109,7 @@ def draw_registration_result(source, target, transformation):
 #ICPによるリファイン
 def refine_registration(source, target, trans, voxel_size):
     distance_threshold = voxel_size * 0.4
-    print(":: Point-to-plane ICP registration is applied on original point")
+    print(":: Point-to-point ICP registration is applied on original point")
     print("   clouds to refine the alignment. This time we use a strict")
     print("   distance threshold %.3f." % distance_threshold)
     result = o3.registration_icp(source, target, 
@@ -149,15 +117,42 @@ def refine_registration(source, target, trans, voxel_size):
             o3.TransformationEstimationPointToPoint())
     return result
 
+
+def icp_registration(source, target, voxel_size):
+    distance_threshold = voxel_size * 0.4
+    print(":: Point-to-point ICP registration is applied on original point")
+    print("   clouds to refine the alignment. This time we use a strict")
+    print("   distance threshold %.3f." % distance_threshold)
+    trans = []
+    trans.append( c3D.RPY2Matrix4x4( 0, 0, 0 ) )
+    trans.append( c3D.RPY2Matrix4x4( pi, 0, 0 ) )
+    trans.append( c3D.RPY2Matrix4x4( 0, pi, 0 ) )
+    trans.append( c3D.RPY2Matrix4x4( 0, 0, pi ) )
+
+    result_score = 999.9
+    result = np.identity(4)
+    for t in trans:
+    
+        cloud_rot, offset  = c3D.Centering( source )
+        cloud_rot.transform( t )
+        cloud_rot = c3D.Offset( cloud_rot, offset )
+
+        result_tmp = o3.registration_icp(cloud_rot, target, 
+                distance_threshold, t,
+                o3.TransformationEstimationPointToPoint())
+        if result_tmp.inlier_rmse < result_score:
+            result_score = result_tmp.inlier_rmse
+            result = result_tmp.transformation
+            print(result_score)
+
+    return result
+
 if __name__ == "__main__":
-    #データ読み込み
+    """Data loading"""
     print(":: Load two point clouds to be matched.")
     color_raw = o3.read_image("./data/rgb.png")
     depth_raw = o3.read_image("./data/depth.png")
     camera_intrinsic = o3.read_pinhole_camera_intrinsic("./data/realsense_intrinsic.json")
-    #color_raw = o3.read_image("./data2/rgb.png")
-    #depth_raw = o3.read_image("./data2/depth.png")
-    #camera_intrinsic = o3.read_pinhole_camera_intrinsic("./data2/realsense_intrinsic.json")
 
     im_color = np.asarray(color_raw)
     im_depth = np.asarray(depth_raw)
@@ -167,17 +162,14 @@ if __name__ == "__main__":
     o3.write_point_cloud( "cloud_in.ply", pcd )
 
     np_pcd = np.asarray(pcd.points)
-    print('min-max of input point cloud')
-    print(np.min(np_pcd, axis=0))
-    print(np.max(np_pcd, axis=0))
 
     # 物体モデルの読み込みと大きさ修正
     model_name = "./data/hammer_1.pcd"
     print('Loading: {}'.format(model_name))
     cloud_m = o3.read_point_cloud( model_name )
-    cloud_m_ds = o3.voxel_down_sample(cloud_m, 2.0)
-    cloud_m_c = Centering(cloud_m_ds)
-    cloud_m_c = Scaling(cloud_m_c, 0.001)
+    cloud_m_ds = o3.voxel_down_sample(cloud_m, 5.0)
+    cloud_m_c, _ = c3D.Centering(cloud_m_ds)
+    cloud_m_c = c3D.Scaling(cloud_m_c, 0.001)
 
     cloud_rot = copy.deepcopy(cloud_m_c)
 
@@ -188,7 +180,6 @@ if __name__ == "__main__":
 
     #print(cloud_m_c)
     #print(np.asarray(cloud_m_c.points))
-    o3.write_point_cloud( "cloud_m.pcd", cloud_rot )
 
     mapping = Mapping('./data/realsense_intrinsic.json')
     img_mapped = mapping.Cloud2Image( cloud_rot )
@@ -210,9 +201,10 @@ if __name__ == "__main__":
         if key == ord("i"):
             print('ICP start')
             voxel_size = 0.02
-            result_icp = refine_registration( cloud_rot, pcd, np.identity(4), 10*voxel_size)
+            #result_icp = refine_registration( cloud_rot, pcd, np.identity(4), 10*voxel_size)
+            result_icp = icp_registration( cloud_rot, pcd, 10*voxel_size)
             print(result_icp)
-            cloud_rot.transform( result_icp.transformation )
+            cloud_rot.transform( result_icp )
 
             img_m = mapping.Cloud2Image( cloud_rot )
             img_m2 = cv2.merge((img_m,img_m,img_m,))
@@ -223,29 +215,8 @@ if __name__ == "__main__":
 
     cv2.destroyAllWindows()
 
-    o3.write_point_cloud( "cloud_m.pcd", cloud_rot )
+    o3.write_point_cloud( "cloud_m.ply", cloud_rot )
 
     np_depth = np.asarray(depth_raw)
     print('max_depth:', np.max(np_depth))
     print('min_depth:', np.min(np_depth))
-
-    """
-    
-    source = cloud_m_c
-    target = pcd
-
-    
-
-    trans = np.identity(4)
-
-    #ICPによる微修正
-    voxel_size = 0.02
-    result_icp = refine_registration(source, target, trans, 10*voxel_size)
-    print(result_icp)
-    print('Result transformation is:')
-    print(result_icp.transformation)
-    draw_registration_result(source, target, result_icp.transformation)
-    cloud_result = copy.deepcopy( source )
-    cloud_result.transform( result_icp.transformation )
-    o3.write_point_cloud( "cloud_result.pcd", cloud_result)
-    """
