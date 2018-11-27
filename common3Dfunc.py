@@ -28,15 +28,6 @@ def Centering( _cloud_in ):
     return cloud_off, center
 
 def ComputeTransformationMatrixAroundCentroid( _cloud_in, _roll, _pitch, _yaw ):
-    """
-    Centering()
-    offset an input cloud to its centroid.
-    
-    input(s):
-        _cloud_in: point cloud to be centered
-    output(s):
-        cloud_off: 
-    """
 
     """ offset center """
     np_in = np.asarray(_cloud_in.points) 
@@ -115,3 +106,10 @@ def Mat2RPY( rot ):
     yaw = atan2( rot[1, 0], rot[0, 0] )
     
     return roll, pitch, yaw
+
+def makeTranslation4x4( offset ):
+
+    trans = np.identity(4)
+    trans[0:3,3] = offset
+
+    return trans

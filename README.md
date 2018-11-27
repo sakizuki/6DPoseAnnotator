@@ -38,7 +38,7 @@ $ python pv.py --input cloud_in_ds.ply cloud_m.ply
 
 ## ToDo
 
-- [ ] output a total transformation matrix
+- [x] output a total transformation matrix
 - [x] add input arguments (model name, scene name)
 - [ ] add input argument of initial pose
 - [ ] handle depth lack points 

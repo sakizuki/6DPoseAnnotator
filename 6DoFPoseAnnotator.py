@@ -16,6 +16,8 @@ CLOUD_ROT = o3.PointCloud()
 all_transformation = np.identity(4)
 """ Step size for rotation """
 step = 0.1*pi
+""" Voxel size for downsampling"""
+voxel_size = 0.005
 
 def get_argumets():
     """
@@ -29,7 +31,7 @@ def get_argumets():
                         help='file name of the depth image of the input scene. We assume that RGB and depth image have pixel-to-pixel correspondence.')
     parser.add_argument('--intrin', type=str, default='data/realsense_intrinsic.json',
                         help='file name of the camera intrinsic.')
-    parser.add_argument('--model', type=str, default='data/hammer_1.pcd',
+    parser.add_argument('--model', type=str, default='data/hammer_mm.ply',
                         help='file name of the object model (.pcd or .ply).')
     
     return parser.parse_args()
@@ -104,14 +106,13 @@ def mouse_event(event, x, y, flags, param):
         offset = np.identity(4)
         offset[0:3,3] -= center
         offset[0:3,3] += pnt
-        all_transformation = np.dot( all_transformation, offset )
+        all_transformation = np.dot( offset, all_transformation )
 
         CLOUD_ROT.points = o3.Vector3dVector(np_cloud)
         img_m = mapping.Cloud2Image( CLOUD_ROT )
         img_m2 = cv2.merge((img_m,img_m,img_m,))
         img_imposed = cv2.addWeighted(img_m2, 0.5,img_c, 0.5, 0 )
 
-        print("Total transformation is\n", all_transformation )
         cv2.imshow( w_name, img_imposed )
 
 
@@ -125,9 +126,6 @@ def refine_registration(source, target, trans, voxel_size):
     result = o3.registration_icp(source, target, 
             distance_threshold, trans,
             o3.TransformationEstimationPointToPoint())
-    
-    """ update all transformation""" 
-    all_transformation = np.dot( all_transformation, result.transformation )
 
     return result.transformation
 
@@ -216,9 +214,10 @@ if __name__ == "__main__":
     """Loading and rescaling of the object model"""
     print('Loading: {}'.format(args.model))
     cloud_m = o3.read_point_cloud( args.model )
-    cloud_m_ds = o3.voxel_down_sample(cloud_m, 5.0)
-    cloud_m_c, _ = c3D.Centering(cloud_m_ds)
-    cloud_m_c = c3D.Scaling(cloud_m_c, 0.001)
+    cloud_m_ds = o3.voxel_down_sample( cloud_m, voxel_size )
+    cloud_m_c, offset = c3D.Centering( cloud_m_ds )
+    mat_centering = c3D.makeTranslation4x4( -1.0*offset )
+    all_transformation = np.dot( mat_centering, all_transformation )
 
     CLOUD_ROT = copy.deepcopy(cloud_m_c)
 
@@ -231,7 +230,7 @@ if __name__ == "__main__":
     cv2.setMouseCallback( window_name, mouse_event, 
                         [window_name, im_color, im_depth, mapping])
 
-    score = 999.9
+    #score = 999.9
     cv2.imshow( window_name, img_mapped )
     while (True):
         key = cv2.waitKey(1) & 0xFF
@@ -241,13 +240,13 @@ if __name__ == "__main__":
         """ICP registration"""
         if key == ord("i"):
             print('ICP start')
-            voxel_size = 0.005
-            result_icp = refine_registration( CLOUD_ROT, pcd, np.identity(4), 10*voxel_size)
+            result_icp = refine_registration( CLOUD_ROT, pcd, np.identity(4), 3.0*voxel_size)
             #result_icp, score_tmp = icp_registration( CLOUD_ROT, cloud_in_ds, voxel_size)
             #print(result_icp)
             #print("score:{}, current score:{}".format(score, score_tmp))
             #if score_tmp < score:
             CLOUD_ROT.transform( result_icp )
+            all_transformation = np.dot( result_icp, all_transformation )
 
             generateImage( mapping, im_color )
 
@@ -256,7 +255,7 @@ if __name__ == "__main__":
             print('Rotation around roll axis')
             rotation = c3D.ComputeTransformationMatrixAroundCentroid( CLOUD_ROT, step, 0, 0 )
             CLOUD_ROT.transform( rotation )
-            all_transformation = np.dot( all_transformation, rotation )
+            all_transformation = np.dot( rotation, all_transformation )
 
             generateImage( mapping, im_color )
             
@@ -264,7 +263,7 @@ if __name__ == "__main__":
             print('Rotation around pitch axis')
             rotation = c3D.ComputeTransformationMatrixAroundCentroid( CLOUD_ROT, 0, step, 0 )
             CLOUD_ROT.transform( rotation )
-            all_transformation = np.dot( all_transformation, rotation )
+            all_transformation = np.dot( rotation, all_transformation )
 
             generateImage( mapping, im_color )
             
@@ -272,11 +271,18 @@ if __name__ == "__main__":
             print('Rotation around yaw axis')
             rotation = c3D.ComputeTransformationMatrixAroundCentroid( CLOUD_ROT, 0, 0, step )
             CLOUD_ROT.transform( rotation )
-            all_transformation = np.dot( all_transformation, rotation )
+            all_transformation = np.dot( rotation, all_transformation )
 
             generateImage( mapping, im_color )
             
 
     cv2.destroyAllWindows()
 
-    o3.write_point_cloud( "cloud_m.ply", CLOUD_ROT )
+    """ Save output files """
+    o3.write_point_cloud( "cloud_rot_ds.ply", CLOUD_ROT )
+    
+    cloud_m.transform( all_transformation )
+    o3.write_point_cloud( "cloud_rot.ply", cloud_m )
+
+    print("\n\nFinal transformation is\n", all_transformation)
+    print("You can transform the original model to the final pose by multiplying above matrix.")
