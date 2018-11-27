@@ -22,7 +22,7 @@ You can use following commands:
 - "1" - Rotation around roll axis.
 - "2" - Rotation around pitch axis.
 - "3" - Rotation around yaw axis.
-- "i" - ICP algorithm is applied with current pose.
+- "i" - ICP algorithm is applied from current pose.
 - "q" - Quit
 
 ![2DView](./data/screenshot_2d_view.png)
@@ -31,7 +31,16 @@ You can use following commands:
 
 For visualizing results in 3D space, type:
 ```
-$ pv.py --input cloud_in_ds.ply cloud_m.ply
+$ python pv.py --input cloud_in_ds.ply cloud_m.ply
 ```
 
 ![3DView](./data/screenshot_3d_view.png)
+
+## ToDo
+
+- [] output a total transformation matrix
+- [] add input augments (model name, scene name)
+- [] add input augment of initial pose
+- [] handle depth lack points 
+- [] visualize depth data of input scene
+- [] visualize coordinate axis
