@@ -5,9 +5,9 @@ An interactive 6 degree-of-freedom pose annotation tool using point cloud proces
 <img src="./data/6DoFAnnotation.gif" width="320px">
 
 ## Requirements
-- Open3D
 - Numpy
-- OpenCV
+- [Open3D](http://www.open3d.org/)
+- [OpenCV](https://opencv.org/)
 
 ## 6D pose annotation with mouse and keyboard commands
 
@@ -35,6 +35,10 @@ $ python pv.py --input cloud_in_ds.ply cloud_rot.ply
 ```
 
 ![3DView](./data/screenshot_3d_view.png)
+
+## How to get RGB and depth image?
+I strongly recommend to follow [pyrs](https://github.com/Toraudonn/pyrs) repository.
+Images of data/ directory were captured using that repository.
 
 ## ToDo
 
