@@ -38,9 +38,9 @@ $ python pv.py --input cloud_in_ds.ply cloud_m.ply
 
 ## ToDo
 
-- [] output a total transformation matrix
-- [] add input augments (model name, scene name)
-- [] add input augment of initial pose
-- [] handle depth lack points 
-- [] visualize depth data of input scene
-- [] visualize coordinate axis
+- [ ] output a total transformation matrix
+- [ ] add input augments (model name, scene name)
+- [ ] add input augment of initial pose
+- [ ] handle depth lack points 
+- [ ] visualize depth data of input scene
+- [ ] visualize coordinate axis
