@@ -31,7 +31,7 @@ You can use following commands:
 
 For visualizing results in 3D space, type:
 ```
-$ python pv.py --input cloud_in_ds.ply cloud_m.ply
+$ python pv.py --input cloud_in_ds.ply cloud_rot.ply
 ```
 
 ![3DView](./data/screenshot_3d_view.png)
