@@ -6,14 +6,33 @@ import open3d as o3
 import numpy as np
 import cv2
 import copy
+import argparse
 import common3Dfunc as c3D
 from math import *
 
+""" Object model to be transformed """
 CLOUD_ROT = o3.PointCloud()
 """ Total transformation"""
 all_transformation = np.identity(4)
 """ Step size for rotation """
 step = 0.1*pi
+
+def get_argumets():
+    """
+        Parse arguments from command line
+    """
+
+    parser = argparse.ArgumentParser( description='Interactive 6DoF pose annotator')
+    parser.add_argument('--cimg', type=str, default='data/rgb.png',
+                        help='file name of the RGB image of the input scene.')
+    parser.add_argument('--dimg', type=str, default='data/depth.png',
+                        help='file name of the depth image of the input scene. We assume that RGB and depth image have pixel-to-pixel correspondence.')
+    parser.add_argument('--intrin', type=str, default='data/realsense_intrinsic.json',
+                        help='file name of the camera intrinsic.')
+    parser.add_argument('--model', type=str, default='data/hammer_1.pcd',
+                        help='file name of the object model (.pcd or .ply).')
+    
+    return parser.parse_args()
 
 class Mapping():
     def __init__(self, camera_intrinsic_name, _w=640, _h=480, _d=1000.0 ):
@@ -70,7 +89,6 @@ def mouse_event(event, x, y, flags, param):
     """Direct move. Object model will be moved to clicked position."""
     if event == cv2.EVENT_LBUTTONUP:
         global all_transformation
-        #cv2.circle(img, (x, y), 50, (0, 0, 255), -1)
         print('Clicked({},{}): depth:{}'.format(x, y, img_d[y,x]))
         print(img_d[y,x])
         pnt = mapping.Pix2Pnt( [x,y], img_d[y,x] )
@@ -97,7 +115,7 @@ def mouse_event(event, x, y, flags, param):
         cv2.imshow( w_name, img_imposed )
 
 
-#ICPによるリファイン
+# Pose refinement by ICP
 def refine_registration(source, target, trans, voxel_size):
     global all_transformation
     distance_threshold = voxel_size * 0.4
@@ -164,14 +182,28 @@ def icp_registration(source, target, voxel_size):
 
     return result, result_fitness
 
+def generateImage( mapping, im_color ):
+    global CLOUD_ROT
+
+    img_m = mapping.Cloud2Image( CLOUD_ROT )
+    img_m2 = cv2.merge((img_m,img_m,img_m,))
+    img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
+    cv2.imshow( window_name, img_mapped )
+
+
+
 if __name__ == "__main__":
+
+    args = get_argumets()
+
     """Data loading"""
     print(":: Load two point clouds to be matched.")
-    color_raw = o3.read_image("./data/rgb.png")
-    depth_raw = o3.read_image("./data/depth.png")
-    camera_intrinsic = o3.read_pinhole_camera_intrinsic("./data/realsense_intrinsic.json")
+    color_raw = o3.read_image( args.cimg )
+    depth_raw = o3.read_image( args.dimg )
+    camera_intrinsic = o3.read_pinhole_camera_intrinsic( args.intrin )
 
     im_color = np.asarray(color_raw)
+    im_color = cv2.cvtColor( im_color, cv2.COLOR_BGR2RGB )
     im_depth = np.asarray(depth_raw)
 
     rgbd_image = o3.create_rgbd_image_from_color_and_depth( color_raw, depth_raw, 1000.0, 2.0 )
@@ -181,10 +213,9 @@ if __name__ == "__main__":
 
     np_pcd = np.asarray(pcd.points)
 
-    # 物体モデルの読み込みと大きさ修正
-    model_name = "./data/hammer_1.pcd"
-    print('Loading: {}'.format(model_name))
-    cloud_m = o3.read_point_cloud( model_name )
+    """Loading and rescaling of the object model"""
+    print('Loading: {}'.format(args.model))
+    cloud_m = o3.read_point_cloud( args.model )
     cloud_m_ds = o3.voxel_down_sample(cloud_m, 5.0)
     cloud_m_c, _ = c3D.Centering(cloud_m_ds)
     cloud_m_c = c3D.Scaling(cloud_m_c, 0.001)
@@ -218,10 +249,8 @@ if __name__ == "__main__":
             #if score_tmp < score:
             CLOUD_ROT.transform( result_icp )
 
-            img_m = mapping.Cloud2Image( CLOUD_ROT )
-            img_m2 = cv2.merge((img_m,img_m,img_m,))
-            img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
-            cv2.imshow( window_name, img_mapped )
+            generateImage( mapping, im_color )
+
         """Step rotation"""
         if key == ord("1"):
             print('Rotation around roll axis')
@@ -229,10 +258,7 @@ if __name__ == "__main__":
             CLOUD_ROT.transform( rotation )
             all_transformation = np.dot( all_transformation, rotation )
 
-            img_m = mapping.Cloud2Image( CLOUD_ROT )
-            img_m2 = cv2.merge((img_m,img_m,img_m,))
-            img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
-            cv2.imshow( window_name, img_mapped )
+            generateImage( mapping, im_color )
             
         if key == ord("2"):
             print('Rotation around pitch axis')
@@ -240,10 +266,7 @@ if __name__ == "__main__":
             CLOUD_ROT.transform( rotation )
             all_transformation = np.dot( all_transformation, rotation )
 
-            img_m = mapping.Cloud2Image( CLOUD_ROT )
-            img_m2 = cv2.merge((img_m,img_m,img_m,))
-            img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
-            cv2.imshow( window_name, img_mapped )
+            generateImage( mapping, im_color )
             
         if key == ord("3"):
             print('Rotation around yaw axis')
@@ -251,16 +274,9 @@ if __name__ == "__main__":
             CLOUD_ROT.transform( rotation )
             all_transformation = np.dot( all_transformation, rotation )
 
-            img_m = mapping.Cloud2Image( CLOUD_ROT )
-            img_m2 = cv2.merge((img_m,img_m,img_m,))
-            img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
-            cv2.imshow( window_name, img_mapped )
+            generateImage( mapping, im_color )
             
 
     cv2.destroyAllWindows()
 
     o3.write_point_cloud( "cloud_m.ply", CLOUD_ROT )
-
-    np_depth = np.asarray(depth_raw)
-    print('max_depth:', np.max(np_depth))
-    print('min_depth:', np.min(np_depth))
