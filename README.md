@@ -38,7 +38,7 @@ $ python pv.py --input cloud_in_ds.ply cloud_rot.ply
 
 ## How to get RGB and depth image?
 I strongly recommend to follow [pyrs](https://github.com/Toraudonn/pyrs) repository.
-Images of data/ directory were captured using that repository.
+Images of directory "data/" were captured using that repository.
 
 ## ToDo
 
