@@ -28,7 +28,18 @@ You can use following commands:
 
 ![2DView](./data/screenshot_2d_view.png)
 
-## Visualization by 3d viewer
+When you type "q", a final transformation matrix, "trans.json", and a transformed point cloud, "cloud_rot.ply", are saved.
+
+### Starting from specific initial transformation
+By using option "--init", you can choose initial transformation matrix to be apply.
+
+Try:
+```
+$ python 6DoFPoseAnnotator.py --init data/trans.json
+```
+
+
+## Visualization by 3D viewer
 
 For visualizing results in 3D space, type:
 ```
