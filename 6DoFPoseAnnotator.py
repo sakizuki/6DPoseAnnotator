@@ -6,7 +6,9 @@ import open3d as o3
 import numpy as np
 import cv2
 import copy
+import json
 import argparse
+import os
 import common3Dfunc as c3D
 from math import *
 
@@ -33,6 +35,8 @@ def get_argumets():
                         help='file name of the camera intrinsic.')
     parser.add_argument('--model', type=str, default='data/hammer_mm.ply',
                         help='file name of the object model (.pcd or .ply).')
+    parser.add_argument('--init', type=str, default='data/init.json',
+                        help='file name of the initial transformation (.json).')
     
     return parser.parse_args()
 
@@ -188,7 +192,20 @@ def generateImage( mapping, im_color ):
     img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
     cv2.imshow( window_name, img_mapped )
 
+""" save transformation matrix as a .json file. """
+def save_transformation( trans, name ):
+    trans_list = trans.tolist() 
+    transform = {"transformation4x4":[trans_list]}
+    f_out = open( name, 'w')  
+    json.dump( transform, f_out )
 
+""" load transformation matrix from a .json file. """
+def load_transformation( name ):
+    f_in = open( name, 'r')
+    json_data = json.load(f_in)
+    trans_in = np.array(json_data["transformation4x4"][0])
+
+    return trans_in
 
 if __name__ == "__main__":
 
@@ -211,15 +228,26 @@ if __name__ == "__main__":
 
     np_pcd = np.asarray(pcd.points)
 
-    """Loading and rescaling of the object model"""
+    """Loading of the object model"""
     print('Loading: {}'.format(args.model))
     cloud_m = o3.read_point_cloud( args.model )
     cloud_m_ds = o3.voxel_down_sample( cloud_m, voxel_size )
-    cloud_m_c, offset = c3D.Centering( cloud_m_ds )
-    mat_centering = c3D.makeTranslation4x4( -1.0*offset )
-    all_transformation = np.dot( mat_centering, all_transformation )
 
-    CLOUD_ROT = copy.deepcopy(cloud_m_c)
+    """Loading of the initial transformation"""
+    initial_trans = np.identity(4)
+    if os.path.exists( args.init ):
+        initial_trans = load_transformation( args.init )
+        print('Use initial transformation\n', initial_trans )
+        all_transformation = np.dot( initial_trans, all_transformation )
+    else:
+        # if initial transformation is not avairable, 
+        # the object model is moved to its center.
+        cloud_m_c, offset = c3D.Centering( cloud_m_ds )
+        mat_centering = c3D.makeTranslation4x4( -1.0*offset )
+        all_transformation = np.dot( mat_centering, all_transformation )
+
+    CLOUD_ROT = copy.deepcopy(cloud_m_ds)
+    CLOUD_ROT.transform( all_transformation )
 
     mapping = Mapping('./data/realsense_intrinsic.json')
     img_mapped = mapping.Cloud2Image( CLOUD_ROT )
@@ -294,3 +322,5 @@ if __name__ == "__main__":
 
     print("\n\nFinal transformation is\n", all_transformation)
     print("You can transform the original model to the final pose by multiplying above matrix.")
+    save_transformation( all_transformation, 'trans.json')
+    
