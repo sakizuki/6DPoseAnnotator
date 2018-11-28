@@ -192,21 +192,6 @@ def generateImage( mapping, im_color ):
     img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
     cv2.imshow( window_name, img_mapped )
 
-""" save transformation matrix as a .json file. """
-def save_transformation( trans, name ):
-    trans_list = trans.tolist() 
-    transform = {"transformation4x4":[trans_list]}
-    f_out = open( name, 'w')  
-    json.dump( transform, f_out )
-
-""" load transformation matrix from a .json file. """
-def load_transformation( name ):
-    f_in = open( name, 'r')
-    json_data = json.load(f_in)
-    trans_in = np.array(json_data["transformation4x4"][0])
-
-    return trans_in
-
 if __name__ == "__main__":
 
     args = get_argumets()
@@ -236,7 +221,7 @@ if __name__ == "__main__":
     """Loading of the initial transformation"""
     initial_trans = np.identity(4)
     if os.path.exists( args.init ):
-        initial_trans = load_transformation( args.init )
+        initial_trans = c3D.load_transformation( args.init )
         print('Use initial transformation\n', initial_trans )
         all_transformation = np.dot( initial_trans, all_transformation )
     else:
@@ -322,5 +307,5 @@ if __name__ == "__main__":
 
     print("\n\nFinal transformation is\n", all_transformation)
     print("You can transform the original model to the final pose by multiplying above matrix.")
-    save_transformation( all_transformation, 'trans.json')
+    c3D.save_transformation( all_transformation, 'trans.json')
     

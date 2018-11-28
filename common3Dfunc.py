@@ -5,6 +5,7 @@
 import open3d as o3 
 import numpy as np
 import copy
+import json
 from math import *
 
 def Centering( _cloud_in ):
@@ -113,3 +114,19 @@ def makeTranslation4x4( offset ):
     trans[0:3,3] = offset
 
     return trans
+
+
+""" save transformation matrix as a .json file. """
+def save_transformation( trans, name ):
+    trans_list = trans.tolist() 
+    transform = {"transformation4x4":[trans_list]}
+    f_out = open( name, 'w')  
+    json.dump( transform, f_out )
+
+""" load transformation matrix from a .json file. """
+def load_transformation( name ):
+    f_in = open( name, 'r')
+    json_data = json.load(f_in)
+    trans_in = np.array(json_data["transformation4x4"][0])
+
+    return trans_in
