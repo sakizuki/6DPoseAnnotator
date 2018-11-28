@@ -45,7 +45,7 @@ Images of directory "data/" were captured using that repository.
 
 - [x] output a total transformation matrix
 - [x] add input arguments (model name, scene name)
-- [ ] add input argument of initial pose
+- [x] add input argument of initial pose
 - [ ] handle depth lack points 
 - [ ] visualize depth data of input scene
 - [ ] visualize coordinate axis
