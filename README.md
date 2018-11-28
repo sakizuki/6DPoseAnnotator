@@ -22,7 +22,8 @@ You can use following commands:
 - "1" - Rotation around roll axis.
 - "2" - Rotation around pitch axis.
 - "3" - Rotation around yaw axis.
-- "i" - Pose refinement by ICP algorithm.
+- "i" - Pose refinement by ICP algorithm (Coarse mode).
+- "f" - Pose refinement by ICP algorithm (Fine mode).
 - "q" - Quit
 
 ![2DView](./data/screenshot_2d_view.png)
