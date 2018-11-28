@@ -231,7 +231,7 @@ if __name__ == "__main__":
                         [window_name, im_color, im_depth, mapping])
 
     #score = 999.9
-    cv2.imshow( window_name, img_mapped )
+    generateImage( mapping, im_color )
     while (True):
         key = cv2.waitKey(1) & 0xFF
         """Quit"""
@@ -239,8 +239,8 @@ if __name__ == "__main__":
             break
         """ICP registration"""
         if key == ord("i"):
-            print('ICP start')
-            result_icp = refine_registration( CLOUD_ROT, pcd, np.identity(4), 3.0*voxel_size)
+            print('ICP start (coarse mode)')
+            result_icp = refine_registration( CLOUD_ROT, pcd, np.identity(4), 10.0*voxel_size)
             #result_icp, score_tmp = icp_registration( CLOUD_ROT, cloud_in_ds, voxel_size)
             #print(result_icp)
             #print("score:{}, current score:{}".format(score, score_tmp))
@@ -249,6 +249,14 @@ if __name__ == "__main__":
             all_transformation = np.dot( result_icp, all_transformation )
 
             generateImage( mapping, im_color )
+
+        if key == ord("f"):
+            print('ICP start (fine mode)')
+            result_icp = refine_registration( CLOUD_ROT, pcd, np.identity(4), 3.0*voxel_size)
+            CLOUD_ROT.transform( result_icp )
+            all_transformation = np.dot( result_icp, all_transformation )
+            generateImage( mapping, im_color )
+
 
         """Step rotation"""
         if key == ord("1"):
