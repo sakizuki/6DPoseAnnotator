@@ -6,7 +6,6 @@ import open3d as o3
 import numpy as np
 import cv2
 import copy
-import json
 import argparse
 import os
 import common3Dfunc as c3D
@@ -133,57 +132,6 @@ def refine_registration(source, target, trans, voxel_size):
 
     return result.transformation
 
-
-def icp_registration(source, target, voxel_size):
-    distance_threshold = voxel_size
-    print(":: Point-to-point ICP registration is applied on original point")
-    print("   clouds to refine the alignment. This time we use a strict")
-    print("   distance threshold %.3f." % distance_threshold)
-    trans = []
-    scale = pi/3.0
-    for r in range(3):
-        roll = scale*r
-        for p in range(3):
-            pitch = scale*p
-            for y in range(3):
-                yaw = scale*y
-                trans_tmp = c3D.ComputeTransformationMatrixAroundCentroid( source, roll, pitch, yaw )
-                trans.append( trans_tmp )
-
-    result_fitness = 999.0
-    result = np.identity(4)
-    trans_id = 0
-
-    for i, t in enumerate(trans):
-    
-        cloud_rot = copy.deepcopy(source)
-
-        #cloud_tmp = copy.deepcopy(cloud_rot)
-        #o3.write_point_cloud("rot"+str(i)+".ply", cloud_tmp )
-        #cloud_tmp.transform(t)
-        #o3.write_point_cloud("rot"+str(i)+"_.ply", cloud_tmp )
-
-        result_tmp = o3.registration_icp(cloud_rot, target, 
-                distance_threshold, t,
-                o3.TransformationEstimationPointToPoint())
-        #print('Score: ',result_tmp.inlier_rmse)
-        #print('Fitness : ',result_tmp.fitness)
-        #if result_fitness < result_tmp.fitness:
-        if result_tmp.inlier_rmse < result_fitness and 0.1 < result_tmp.fitness:
-            result_fitness = result_tmp.inlier_rmse
-            result = result_tmp.transformation
-            trans_id = i
-            cloud_rot.transform( result_tmp.transformation )
-            o3.write_point_cloud("icp_result.ply", cloud_rot)
-            print(" Update: ", result_fitness)
-            print(' Fitness : ',result_tmp.fitness)
-            print(result)
-            print(trans[trans_id])
-
-    print("trans id: ", trans_id)
-
-    return result, result_fitness
-
 def generateImage( mapping, im_color ):
     global CLOUD_ROT
 
@@ -243,7 +191,6 @@ if __name__ == "__main__":
     cv2.setMouseCallback( window_name, mouse_event, 
                         [window_name, im_color, im_depth, mapping])
 
-    #score = 999.9
     generateImage( mapping, im_color )
     while (True):
         key = cv2.waitKey(1) & 0xFF
@@ -254,10 +201,6 @@ if __name__ == "__main__":
         if key == ord("i"):
             print('ICP start (coarse mode)')
             result_icp = refine_registration( CLOUD_ROT, pcd, np.identity(4), 10.0*voxel_size)
-            #result_icp, score_tmp = icp_registration( CLOUD_ROT, cloud_in_ds, voxel_size)
-            #print(result_icp)
-            #print("score:{}, current score:{}".format(score, score_tmp))
-            #if score_tmp < score:
             CLOUD_ROT.transform( result_icp )
             all_transformation = np.dot( result_icp, all_transformation )
 
