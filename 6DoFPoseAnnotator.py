@@ -112,12 +112,7 @@ def mouse_event(event, x, y, flags, param):
         all_transformation = np.dot( offset, all_transformation )
 
         CLOUD_ROT.points = o3.Vector3dVector(np_cloud)
-        img_m = mapping.Cloud2Image( CLOUD_ROT )
-        img_m2 = cv2.merge((img_m,img_m,img_m,))
-        img_imposed = cv2.addWeighted(img_m2, 0.5,img_c, 0.5, 0 )
-
-        cv2.imshow( w_name, img_imposed )
-
+        generateImage( mapping, img_c )
 
 # Pose refinement by ICP
 def refine_registration(source, target, trans, voxel_size):
@@ -136,7 +131,8 @@ def generateImage( mapping, im_color ):
     global CLOUD_ROT
 
     img_m = mapping.Cloud2Image( CLOUD_ROT )
-    img_m2 = cv2.merge((img_m,img_m,img_m,))
+    im_zero = np.zeros( img_m.shape, dtype=np.uint8 )
+    img_m2 = cv2.merge((im_zero,img_m,im_zero))
     img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
     cv2.imshow( window_name, img_mapped )
 
@@ -156,6 +152,7 @@ if __name__ == "__main__":
 
     rgbd_image = o3.create_rgbd_image_from_color_and_depth( color_raw, depth_raw, 1000.0, 2.0 )
     pcd = o3.create_point_cloud_from_rgbd_image(rgbd_image, camera_intrinsic )
+    o3.write_point_cloud( "cloud_in.ply", pcd )
     cloud_in_ds = o3.voxel_down_sample(pcd, 0.005)
     o3.write_point_cloud( "cloud_in_ds.ply", cloud_in_ds )
 
