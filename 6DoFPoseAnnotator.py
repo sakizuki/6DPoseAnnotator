@@ -67,11 +67,22 @@ class Mapping():
         cloud_mapped = o3.PointCloud()
         cloud_mapped.points = o3.Vector3dVector(cloud_np)
         cloud_mapped.transform(self.camera_intrinsic4x4)
-        #print(np.asarray(cloud_mapped.points))
+        cloud_color = np.asarray(cloud_in.colors)
+
+        """ If cloud_in has the field of color, color is mapped into the image. """
+        if len(cloud_color) == len(cloud_np):
+            img = cv2.merge((img,img,img))
+            for i, pix in enumerate(cloud_mapped.points):
+                if pix[0]<self.width and 0<pix[0] and pix[1]<self.height and 0<pix[1]:
+                    img[int(pix[1]),int(pix[0])] = (cloud_color[i]*255.0).astype(np.uint8)
+
         
-        for i, pix in enumerate(cloud_mapped.points):
-            if pix[0]<self.width and 0<pix[0] and pix[1]<self.height and 0<pix[1]:
-               img[int(pix[1]),int(pix[0])] = int(255.0*(cloud_np[i,2]/cloud_min[2]))
+        else:
+            for i, pix in enumerate(cloud_mapped.points):
+                if pix[0]<self.width and 0<pix[0] and pix[1]<self.height and 0<pix[1]:
+                    img[int(pix[1]),int(pix[0])] = int(255.0*(cloud_np[i,2]/cloud_min[2]))
+
+            img = cv2.merge((img,img,img))
         
         return img
     
@@ -131,9 +142,7 @@ def generateImage( mapping, im_color ):
     global CLOUD_ROT
 
     img_m = mapping.Cloud2Image( CLOUD_ROT )
-    im_zero = np.zeros( img_m.shape, dtype=np.uint8 )
-    img_m2 = cv2.merge((im_zero,img_m,im_zero))
-    img_mapped = cv2.addWeighted(img_m2, 0.5, im_color, 0.5, 0 )
+    img_mapped = cv2.addWeighted(img_m, 0.5, im_color, 0.5, 0 )
     cv2.imshow( window_name, img_mapped )
 
 if __name__ == "__main__":
@@ -161,6 +170,9 @@ if __name__ == "__main__":
     """Loading of the object model"""
     print('Loading: {}'.format(args.model))
     cloud_m = o3.read_point_cloud( args.model )
+    """ if you use object model with meter scale, try this code to convert meter scale."""
+    #cloud_m = c3D.Scaling( cloud_m, 0.001 )
+
     cloud_m_ds = o3.voxel_down_sample( cloud_m, voxel_size )
 
     """Loading of the initial transformation"""
