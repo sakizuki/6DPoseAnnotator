@@ -59,7 +59,8 @@ class Mapping():
         
         img = np.zeros( [self.height, self.width], dtype=np.uint8 )
         
-        cloud_np = np.asarray(cloud_in.points)
+        cloud_np1 = np.asarray(cloud_in.points)
+        cloud_np = cloud_np1[cloud_np1[:,2].argsort()[::-1],:]
         cloud_np = cloud_np[:,:] / cloud_np[:,[2]]
 
         cloud_min = np.min(cloud_np,axis=0)
@@ -67,7 +68,8 @@ class Mapping():
         cloud_mapped = o3.PointCloud()
         cloud_mapped.points = o3.Vector3dVector(cloud_np)
         cloud_mapped.transform(self.camera_intrinsic4x4)
-        cloud_color = np.asarray(cloud_in.colors)
+        cloud_color1 = np.asarray(cloud_in.colors)
+        cloud_color = cloud_color1[cloud_np1[:,2].argsort()[::-1],:]
 
         """ If cloud_in has the field of color, color is mapped into the image. """
         if len(cloud_color) == len(cloud_np):
@@ -256,6 +258,8 @@ if __name__ == "__main__":
     
     cloud_m.transform( all_transformation )
     o3.write_point_cloud( "cloud_rot.ply", cloud_m )
+    img_mapped_original = mapping.Cloud2Image( cloud_m )
+    cv2.imwrite("img_mapped.png", img_mapped_original)
 
     print("\n\nFinal transformation is\n", all_transformation)
     print("You can transform the original model to the final pose by multiplying above matrix.")
