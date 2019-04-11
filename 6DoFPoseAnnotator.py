@@ -69,10 +69,10 @@ class Mapping():
         cloud_mapped.points = o3.Vector3dVector(cloud_np)
         cloud_mapped.transform(self.camera_intrinsic4x4)
         cloud_color1 = np.asarray(cloud_in.colors)
-        cloud_color = cloud_color1[cloud_np1[:,2].argsort()[::-1],:]
 
         """ If cloud_in has the field of color, color is mapped into the image. """
-        if len(cloud_color) == len(cloud_np):
+        if len(cloud_color1) == len(cloud_np):
+            cloud_color = cloud_color1[cloud_np1[:,2].argsort()[::-1],:]
             img = cv2.merge((img,img,img))
             for i, pix in enumerate(cloud_mapped.points):
                 if pix[0]<self.width and 0<pix[0] and pix[1]<self.height and 0<pix[1]:
