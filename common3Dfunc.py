@@ -1,6 +1,6 @@
 # Common functions for 3D processiong 
-# Shuichi Akizuki, Keio Univ.
-# Email: akizuki@elec.keio.ac.jp
+# Shuichi Akizuki, Chukyo Univ.
+# Email: s-akizuki@sist.chukyo-u.ac.jp
 #
 import open3d as o3 
 import numpy as np
