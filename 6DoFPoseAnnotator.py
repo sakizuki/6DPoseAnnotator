@@ -58,21 +58,28 @@ class Mapping():
     def Cloud2Image( self, cloud_in ):
         
         img = np.zeros( [self.height, self.width], dtype=np.uint8 )
+        img_zero = np.zeros( [self.height, self.width], dtype=np.uint8 )
         
         cloud_np1 = np.asarray(cloud_in.points)
-        cloud_np = cloud_np1[cloud_np1[:,2].argsort()[::-1],:]
-        cloud_np = cloud_np[:,:] / cloud_np[:,[2]]
+        sorted_indices = np.argsort(cloud_np1[:,2])[::-1]
+        cloud_np = cloud_np1[sorted_indices]
+        cloud_np_xy = cloud_np[:,0:2] / cloud_np[:,[2]]
+        # cloud_np ... (x/z, y/z, z)
+        cloud_np = np.hstack((cloud_np_xy,cloud_np[:,[2]])) 
 
-        cloud_min = np.min(cloud_np,axis=0)
-
+        cloud_color1 = np.asarray(cloud_in.colors)
+        
         cloud_mapped = o3.PointCloud()
         cloud_mapped.points = o3.Vector3dVector(cloud_np)
+        
+        
         cloud_mapped.transform(self.camera_intrinsic4x4)
-        cloud_color1 = np.asarray(cloud_in.colors)
+
+        
 
         """ If cloud_in has the field of color, color is mapped into the image. """
         if len(cloud_color1) == len(cloud_np):
-            cloud_color = cloud_color1[cloud_np1[:,2].argsort()[::-1],:]
+            cloud_color = cloud_color1[sorted_indices]
             img = cv2.merge((img,img,img))
             for i, pix in enumerate(cloud_mapped.points):
                 if pix[0]<self.width and 0<pix[0] and pix[1]<self.height and 0<pix[1]:
@@ -82,9 +89,9 @@ class Mapping():
         else:
             for i, pix in enumerate(cloud_mapped.points):
                 if pix[0]<self.width and 0<pix[0] and pix[1]<self.height and 0<pix[1]:
-                    img[int(pix[1]),int(pix[0])] = int(255.0*(cloud_np[i,2]/cloud_min[2]))
+                    img[int(pix[1]),int(pix[0])] = int(255.0*(cloud_np[i,2]/cloud_np[0,2]))
 
-            img = cv2.merge((img,img,img))
+            img = cv2.merge((img_zero,img,img_zero))
         
         return img
     
