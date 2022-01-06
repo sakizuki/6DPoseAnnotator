@@ -2,7 +2,7 @@
 # Shuichi Akizuki, Chukyo Univ.
 # Email: s-akizuki@sist.chukyo-u.ac.jp
 #
-import open3d as o3 
+import open3d as o3d
 import numpy as np
 import copy
 import json
@@ -23,8 +23,8 @@ def Centering( _cloud_in ):
     center = np.mean(np_m, axis=0)
     np_m[:] -= center
     
-    cloud_off = o3.PointCloud()
-    cloud_off.points = o3.Vector3dVector(np_m)
+    cloud_off = o3d.geometry.PointCloud()
+    cloud_off.points = o3d.utility.Vector3dVector(np_m)
     
     return cloud_off, center
 
@@ -59,16 +59,16 @@ def Scaling( cloud_in, scale ):
     """   
     cloud_np = np.asarray(cloud_in.points) 
     cloud_np *= scale
-    cloud_out = o3.PointCloud()
-    cloud_out.points = o3.Vector3dVector(cloud_np)
+    cloud_out = o3d.geometry.PointCloud()
+    cloud_out.points = o3d.utility.Vector3dVector(cloud_np)
     
     return cloud_out
 
 def Offset( cloud_in, offset ):
     cloud_np = np.asarray(cloud_in.points)
     cloud_np += offset
-    cloud_off = o3.PointCloud()
-    cloud_off.points = o3.Vector3dVector(cloud_np)
+    cloud_off = o3d.geometry.PointCloud()
+    cloud_off.points = o3d.utility.Vector3dVector(cloud_np)
     return cloud_off
 
 def RPY2Matrix4x4( roll, pitch, yaw ):

@@ -2,7 +2,7 @@
 # Shuichi Akizuki, Chukyo Univ.
 # Email: s-akizuki@sist.chukyo-u.ac.jp
 #
-import open3d as o3 
+import open3d as o3d 
 import numpy as np
 import cv2
 import copy
@@ -12,7 +12,7 @@ import common3Dfunc as c3D
 from math import *
 
 """ Object model to be transformed """
-CLOUD_ROT = o3.PointCloud()
+CLOUD_ROT = o3d.geometry.PointCloud()
 """ Total transformation"""
 all_transformation = np.identity(4)
 """ Step size for rotation """
@@ -41,7 +41,7 @@ def get_argumets():
 
 class Mapping():
     def __init__(self, camera_intrinsic_name, _w=640, _h=480, _d=1000.0 ):
-        self.camera_intrinsic = o3.read_pinhole_camera_intrinsic(camera_intrinsic_name)
+        self.camera_intrinsic = o3d.io.read_pinhole_camera_intrinsic(camera_intrinsic_name)
         self.width = _w
         self.height = _h
         self.d = _d
@@ -69,8 +69,8 @@ class Mapping():
 
         cloud_color1 = np.asarray(cloud_in.colors)
         
-        cloud_mapped = o3.PointCloud()
-        cloud_mapped.points = o3.Vector3dVector(cloud_np)
+        cloud_mapped = o3d.geometry.PointCloud()
+        cloud_mapped.points = o3d.utility.Vector3dVector(cloud_np)
         
         
         cloud_mapped.transform(self.camera_intrinsic4x4)
@@ -131,7 +131,7 @@ def mouse_event(event, x, y, flags, param):
         offset[0:3,3] += pnt
         all_transformation = np.dot( offset, all_transformation )
 
-        CLOUD_ROT.points = o3.Vector3dVector(np_cloud)
+        CLOUD_ROT.points = o3d.utility.Vector3dVector(np_cloud)
         generateImage( mapping, img_c )
 
 # Pose refinement by ICP
@@ -141,9 +141,9 @@ def refine_registration(source, target, trans, voxel_size):
     print(":: Point-to-point ICP registration is applied on original point")
     print("   clouds to refine the alignment. This time we use a strict")
     print("   distance threshold %.3f." % distance_threshold)
-    result = o3.registration_icp(source, target, 
-            distance_threshold, trans,
-            o3.TransformationEstimationPointToPoint())
+    result = o3d.pipelines.registration.registration_icp(source, target, 
+                                            distance_threshold, trans,
+                                            o3d.pipelines.registration.TransformationEstimationPointToPoint())
 
     return result.transformation
 
@@ -160,29 +160,29 @@ if __name__ == "__main__":
 
     """Data loading"""
     print(":: Load two point clouds to be matched.")
-    color_raw = o3.read_image( args.cimg )
-    depth_raw = o3.read_image( args.dimg )
-    camera_intrinsic = o3.read_pinhole_camera_intrinsic( args.intrin )
+    color_raw = o3d.io.read_image( args.cimg )
+    depth_raw = o3d.io.read_image( args.dimg )
+    camera_intrinsic = o3d.io.read_pinhole_camera_intrinsic( args.intrin )
 
     im_color = np.asarray(color_raw)
     im_color = cv2.cvtColor( im_color, cv2.COLOR_BGR2RGB )
     im_depth = np.asarray(depth_raw)
 
-    rgbd_image = o3.create_rgbd_image_from_color_and_depth( color_raw, depth_raw, 1000.0, 2.0 )
-    pcd = o3.create_point_cloud_from_rgbd_image(rgbd_image, camera_intrinsic )
-    o3.write_point_cloud( "cloud_in.ply", pcd )
-    cloud_in_ds = o3.voxel_down_sample(pcd, 0.005)
-    o3.write_point_cloud( "cloud_in_ds.ply", cloud_in_ds )
+    rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth( color_raw, depth_raw, 1000.0, 2.0 )
+    pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, camera_intrinsic )
+    o3d.io.write_point_cloud( "cloud_in.ply", pcd )
+    cloud_in_ds = pcd.voxel_down_sample(0.005)
+    o3d.io.write_point_cloud( "cloud_in_ds.ply", cloud_in_ds )
 
     np_pcd = np.asarray(pcd.points)
 
     """Loading of the object model"""
     print('Loading: {}'.format(args.model))
-    cloud_m = o3.read_point_cloud( args.model )
+    cloud_m = o3d.io.read_point_cloud( args.model )
     """ if you use object model with meter scale, try this code to convert meter scale."""
     #cloud_m = c3D.Scaling( cloud_m, 0.001 )
 
-    cloud_m_ds = o3.voxel_down_sample( cloud_m, voxel_size )
+    cloud_m_ds = cloud_m.voxel_down_sample( voxel_size )
 
     """Loading of the initial transformation"""
     initial_trans = np.identity(4)
@@ -261,10 +261,10 @@ if __name__ == "__main__":
     cv2.destroyAllWindows()
 
     """ Save output files """
-    o3.write_point_cloud( "cloud_rot_ds.ply", CLOUD_ROT )
+    o3d.io.write_point_cloud( "cloud_rot_ds.ply", CLOUD_ROT )
     
     cloud_m.transform( all_transformation )
-    o3.write_point_cloud( "cloud_rot.ply", cloud_m )
+    o3d.io.write_point_cloud( "cloud_rot.ply", cloud_m )
     img_mapped_original = mapping.Cloud2Image( cloud_m )
     cv2.imwrite("img_mapped.png", img_mapped_original)
 

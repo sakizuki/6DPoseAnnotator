@@ -5,9 +5,8 @@ An interactive 6 degree-of-freedom pose annotation tool using point cloud proces
 <img src="./data/6DoFAnnotation.gif" width="320px">
 
 ## Requirements
-- Numpy
-- [Open3D](http://www.open3d.org/)
-- [OpenCV](https://opencv.org/)
+- [open3d==0.11.1](http://www.open3d.org/)
+- [opencv-python==4.4.0.44](https://opencv.org/)
 
 ## 6D pose annotation with mouse and keyboard commands
 
